@@ -1,0 +1,110 @@
+.login-page {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-navy-dark);
+  padding: var(--space-4);
+}
+.login-card {
+  width: 100%;
+  max-width: 380px;
+}
+.login-links {
+  margin-top: var(--space-4);
+  text-align: center;
+  font-size: 0.85rem;
+}
+
+/* ---------- split branding/form screen (main Login page only) ---------- */
+.login-screen {
+  min-height: 100%;
+  display: flex;
+}
+
+.login-brand-panel {
+  flex: 1 1 46%;
+  max-width: 560px;
+  background: radial-gradient(circle at 20% 20%, #123249 0%, var(--color-sidebar) 55%, #081522 100%);
+  color: #fff;
+  padding: var(--space-6) 56px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-4);
+}
+.login-brand-mark {
+  margin-bottom: var(--space-2);
+}
+.login-brand-title {
+  font-size: 1.7rem;
+  margin: 0;
+  max-width: 380px;
+}
+.login-brand-tagline {
+  color: rgba(255, 255, 255, 0.72);
+  max-width: 380px;
+  margin: 0;
+  line-height: 1.6;
+}
+.login-value-list {
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 380px;
+}
+.login-value-list li {
+  position: relative;
+  padding-left: 22px;
+  font-size: 0.88rem;
+  color: rgba(255, 255, 255, 0.82);
+  line-height: 1.5;
+}
+.login-value-list li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 7px;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--color-accent-light);
+}
+
+.login-form-panel {
+  flex: 1 1 54%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  background: var(--color-bg);
+}
+.login-form-title {
+  margin-bottom: 2px;
+}
+.login-footnote {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+}
+
+@media (max-width: 860px) {
+  .login-screen {
+    flex-direction: column;
+  }
+  .login-brand-panel {
+    max-width: none;
+    padding: 40px 28px;
+    gap: var(--space-3);
+  }
+  .login-value-list {
+    display: none;
+  }
+  .login-form-panel {
+    padding: var(--space-5) var(--space-4) 40px;
+  }
+}
