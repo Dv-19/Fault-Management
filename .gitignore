@@ -1,0 +1,13 @@
+@"
+target/
+logs/
+.classpath
+.project
+.settings/
+.idea/
+*.iml
+*.log
+.env
+.env.*
+"@ | Set-Content -Encoding utf8 .gitignore
+Add-Content .gitignore "src.zip"
