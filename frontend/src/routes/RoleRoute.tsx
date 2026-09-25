@@ -6,8 +6,6 @@ import { Role } from '../types/domain';
 export default function RoleRoute({ allow }: { allow: Role[] }) {
   const { user } = useAuth();
 
-  // ProtectedRoute (the parent) already guarantees `user` is set here, but
-  // keep this check self-contained in case RoleRoute is ever used alone.
   if (!user) return <Navigate to="/login" replace />;
 
   if (!allow.includes(user.role)) {

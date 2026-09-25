@@ -1,109 +1,135 @@
-// Shared domain types for the Fault Management Dashboard.
-// Source of truth: FRONTEND_BACKEND_INTEGRATION.md sections 3, 5-8.
-// Values marked "pending" trace back to an unresolved decision in that doc —
-// keep them isolated here so a later change only touches one file.
-
-export type UserState = 'ACTIVATED' | 'DEACTIVATED';
-export type DeviceState = 'ACTIVATED' | 'DEACTIVATED';
-export type FaultStatus = 'OPEN' | 'ACKNOWLEDGED' | 'CLEARED' | 'TERMINATED';
-
 /**
- * Explicit backend source values are ADMIN / OPERATOR / MANAGER.
- * "VIEW" shows up in one source as a possible 4th role but is not confirmed
- * to be distinct from MANAGER (see integration doc, open decision #1).
- * Do not branch UI logic on a 'VIEW' role until that is resolved.
+ * Domain types aligned exactly to the backend DTOs and integration doc.
+ * Field names match what the backend actually sends/expects.
  */
+
+// ---------------------------------------------------------------------------
+// Enums (sent/received as exact uppercase strings)
+// ---------------------------------------------------------------------------
+
 export type Role = 'ADMIN' | 'OPERATOR' | 'MANAGER';
+export type UserState = 'ACTIVATED' | 'DEACTIVATED';
+export type DeviceType = 'HUB' | 'SWITCH' | 'ROUTER';
+export type DeviceState = 'ACTIVATED' | 'DEACTIVATED';
+
+/** Severity enum — matches backend com.infy.enums.Severity */
+export type Severity = 'CLEAR' | 'WARNING' | 'MAJOR' | 'SEVERE' | 'CRITICAL';
+
+/** AlarmStatus enum — matches backend com.infy.enums.AlarmStatus */
+export type AlarmStatus = 'UNACKNOWLEDGED' | 'ACKNOWLEDGED' | 'CLEARED' | 'TERMINATED';
+
+export type SecretQuestion =
+  | 'FIRST_PET'
+  | 'BIRTH_CITY'
+  | 'FAVOURITE_TEACHER'
+  | 'MOTHERS_MAIDEN_NAME'
+  | 'FAVOURITE_BOOK';
+
+// ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+
+export interface CurrentUser {
+  username: string;
+  role: Role;
+}
+
+// ---------------------------------------------------------------------------
+// Generic API wrappers
+// ---------------------------------------------------------------------------
 
 /**
- * Confirm this vocabulary with backend/product before it's treated as final
- * (integration doc, open decision #7). Kept as a union + string fallback on
- * the Fault type so an unrecognized value never crashes the UI.
+ * ApiResponseDto<T> — every success response from the backend.
  */
-export type FaultSeverity = 'CLEAR' | 'WARNING' | 'MAJOR' | 'SEVERE' | 'CRITICAL';
-
-export interface ApiMessage {
+export interface ApiResponse<T = null> {
+  success: boolean;
   message: string;
+  data: T;
 }
 
-export interface ApiError {
-  status: number;
-  code: string;
-  message: string;
-  fieldErrors?: Record<string, string>;
-  timestamp?: string;
-}
-
-export interface PageResponse<T> {
+/**
+ * PagedResponseDto<T> — returned by every paginated list endpoint.
+ * Fields match PagedResponseDto.java exactly.
+ */
+export interface PagedResponse<T> {
   content: T[];
-  page: number; // zero-based, as returned by the API
-  size: number;
+  page: number;       // zero-based current page
+  size: number;       // page size (10)
   totalElements: number;
   totalPages: number;
 }
 
-export interface CurrentUser {
-  userId: number;
-  username: string;
-  role: Role;
-  userState: UserState;
-  mustChangePassword?: boolean; // pending first-login policy
-}
+// ---------------------------------------------------------------------------
+// Users
+// ---------------------------------------------------------------------------
 
 export interface UserSummary {
-  userId: number;
+  id: number;
   username: string;
   role: Role;
   userState: UserState;
 }
 
+// ---------------------------------------------------------------------------
+// Devices
+// ---------------------------------------------------------------------------
+
 export interface Device {
-  deviceId: number;
+  id: number;
   serialNumber: string;
   ipAddress: string;
-  deviceType: string; // controlled list not yet specified by backend
+  deviceType: DeviceType;
   deviceState: DeviceState;
-  configuredByUserId?: number; // pending ownership decision
 }
 
-export interface Fault {
-  faultId: number;
-  deviceId?: number;
+// ---------------------------------------------------------------------------
+// Alarms
+// ---------------------------------------------------------------------------
+
+/**
+ * LocalDateTime from Jackson with write-dates-as-timestamps=true (default)
+ * arrives as a number array: [year, month, day, hour, minute, second, nano].
+ * With write-dates-as-timestamps=false it arrives as an ISO string.
+ * We accept both.
+ */
+export type JavaLocalDateTime = string | number[] | null;
+
+export interface Alarm {
+  id: number;
   deviceIp: string;
-  deviceSerialNumber: string;
-  deviceType: string;
-  alarmName: string;
-  severity: FaultSeverity | string;
-  status: FaultStatus;
-  isAcknowledged: boolean;
-  notes?: string;
-  occurrence?: number | string;
-  firstTimeDetected?: string;
-  lastTimeDetected?: string;
-  acknowledgedBy?: string;
-  clearedBy?: string;
-  canAcknowledge: boolean;
-  canClear: boolean;
-  canTerminate: boolean;
+  serialNumber: string;
+  deviceType: DeviceType;
+  severity: Severity;
+  trap: string;
+  notes: string | null;
+  occurrence: number;
+  status: AlarmStatus;
+
+  // A3: Audit trail — null until that lifecycle step happens
+  acknowledgedBy: string | null;
+  acknowledgedAt: JavaLocalDateTime;
+  clearedBy: string | null;
+  clearedAt: JavaLocalDateTime;
+  terminatedBy: string | null;
+  terminatedAt: JavaLocalDateTime;
 }
 
-export interface FaultActionResult {
-  faultId: number;
-  success: boolean;
-  message: string;
-}
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-export interface BulkActionResponse {
-  results?: FaultActionResult[]; // per-item outcome, if the backend supports it
-  message?: string; // fallback, in case the backend responds all-or-nothing
-}
-
-export interface FaultReportSummaryItem {
-  category: string;
-  count: number;
-}
-
-/** Type guard so components can render a safe fallback for unknown values. */
-export function isKnownSeverity(value: string): value is FaultSeverity {
+export function isKnownSeverity(value: string): value is Severity {
   return ['CLEAR', 'WARNING', 'MAJOR', 'SEVERE', 'CRITICAL'].includes(value);
+}
+
+/**
+ * Convert a JavaLocalDateTime (ISO string or number array) to a JS Date.
+ * Returns null if value is null/undefined.
+ */
+export function parseJavaDateTime(value: JavaLocalDateTime): Date | null {
+  if (!value) return null;
+  if (typeof value === 'string') return new Date(value);
+  // array: [year, month(1-based), day, hour, minute, second, nano?]
+  const [y, mo, d, h = 0, mi = 0, s = 0, nano = 0] = value as number[];
+  return new Date(y, mo - 1, d, h, mi, s, Math.floor(nano / 1_000_000));
 }

@@ -1,3 +1,14 @@
+/**
+ * Edit Device dialog (US13).
+ * PUT /api/devices  body: { serialNumber, newIpAddress }
+ *
+ * The backend EditDeviceRequestDto accepts:
+ *   - serialNumber: lookup key (identifies which device to edit, cannot be changed)
+ *   - newIpAddress: the new IP to set
+ *
+ * Note: the SRS mentions serial number as editable, but the backend only
+ * supports IP editing. Serial and device type are shown read-only.
+ */
 import React, { useEffect, useState } from 'react';
 import { Device } from '../../types/domain';
 import { validateIpAddress } from '../../api/deviceApi';
@@ -6,77 +17,93 @@ interface EditDeviceDialogProps {
   device: Device | null;
   submitting: boolean;
   fieldErrors: Record<string, string>;
-  onConfirm: (originalSerialNumber: string, newSerialNumber: string, newIp: string) => void;
+  onConfirm: (serialNumber: string, newIpAddress: string) => void;
   onCancel: () => void;
 }
 
-/**
- * US13: serial number and IP are both editable here; device type is shown
- * read-only. Still a pop-up per the SRS, with its own confirm step before
- * the update is sent.
- */
-export default function EditDeviceDialog({ device, submitting, fieldErrors, onConfirm, onCancel }: EditDeviceDialogProps) {
-  const [serialNumber, setSerialNumber] = useState('');
-  const [ipAddress, setIpAddress] = useState('');
+export default function EditDeviceDialog({
+  device,
+  submitting,
+  fieldErrors,
+  onConfirm,
+  onCancel,
+}: EditDeviceDialogProps) {
+  const [newIpAddress, setNewIpAddress] = useState('');
   const [ipError, setIpError] = useState<string | null>(null);
   const [step, setStep] = useState<'edit' | 'confirm'>('edit');
 
   useEffect(() => {
-    setSerialNumber(device?.serialNumber ?? '');
-    setIpAddress(device?.ipAddress ?? '');
-    setIpError(null);
-    setStep('edit');
+    if (device) {
+      setNewIpAddress(device.ipAddress);
+      setIpError(null);
+      setStep('edit');
+    }
   }, [device]);
 
   if (!device) return null;
 
   const handleContinue = () => {
-    const clientIpError = validateIpAddress(ipAddress);
-    setIpError(clientIpError);
-    if (clientIpError || !serialNumber.trim()) return;
+    const err = validateIpAddress(newIpAddress);
+    setIpError(err);
+    if (err) return;
     setStep('confirm');
   };
 
   return (
     <div className="dialog-overlay" role="presentation" onClick={onCancel}>
-      <div className="dialog" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="dialog"
+        role="dialog"
+        aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
+      >
         {step === 'edit' ? (
           <>
             <h2>Edit device</h2>
+
             <div className="field">
-              <label htmlFor="edit-serial">Device serial number</label>
-              <input
-                id="edit-serial"
-                value={serialNumber}
-                onChange={(e) => setSerialNumber(e.target.value)}
-                required
-              />
-              {fieldErrors.serialNumber && <span className="field-error">{fieldErrors.serialNumber}</span>}
+              <label>Serial number</label>
+              <input value={device.serialNumber} disabled />
+              <span className="field-hint">Serial number cannot be changed.</span>
             </div>
+
             <div className="field">
-              <label htmlFor="edit-ip">Device IP address</label>
+              <label htmlFor="edit-ip">IP address</label>
               <input
                 id="edit-ip"
-                value={ipAddress}
+                value={newIpAddress}
                 onChange={(e) => {
-                  setIpAddress(e.target.value);
+                  setNewIpAddress(e.target.value);
                   setIpError(null);
                 }}
+                required
               />
-              {(ipError || fieldErrors.ipAddress) && (
-                <span className="field-error">{ipError ?? fieldErrors.ipAddress}</span>
+              {(ipError || fieldErrors.newIpAddress) && (
+                <span className="field-error">{ipError ?? fieldErrors.newIpAddress}</span>
               )}
             </div>
+
             <div className="field">
               <label>Device type</label>
               <input value={device.deviceType} disabled />
-              <span className="field-hint">Device type cannot be changed here.</span>
+              <span className="field-hint">Device type cannot be changed.</span>
             </div>
+
             <div className="dialog-actions">
-              <button type="button" className="btn btn-ghost" onClick={onCancel} disabled={submitting}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={onCancel}
+                disabled={submitting}
+              >
                 Cancel
               </button>
-              <button type="button" className="btn btn-primary" onClick={handleContinue} disabled={submitting}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleContinue}
+                disabled={submitting}
+              >
                 Update
               </button>
             </div>
@@ -85,17 +112,23 @@ export default function EditDeviceDialog({ device, submitting, fieldErrors, onCo
           <>
             <h2>Confirm device update</h2>
             <p className="dialog-description">
-              Save {serialNumber} · {ipAddress}?
+              Update IP address for <strong>{device.serialNumber}</strong> to{' '}
+              <strong>{newIpAddress}</strong>?
             </p>
             <div className="dialog-actions">
-              <button type="button" className="btn btn-ghost" onClick={() => setStep('edit')} disabled={submitting}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setStep('edit')}
+                disabled={submitting}
+              >
                 Back
               </button>
               <button
                 type="button"
                 className="btn btn-primary"
                 disabled={submitting}
-                onClick={() => onConfirm(device.serialNumber, serialNumber, ipAddress)}
+                onClick={() => onConfirm(device.serialNumber, newIpAddress)}
               >
                 {submitting ? 'Saving…' : 'Confirm'}
               </button>

@@ -3,18 +3,18 @@ import { Device } from '../../types/domain';
 
 interface DeviceTableProps {
   devices: Device[];
-  /** Omit to hide the "Edit" action (e.g. Device List tab is view-only). */
   onEdit?: (device: Device) => void;
-  /** Omit to hide the "Delete" action (e.g. Device List / Edit Device tabs). */
   onDeactivate?: (device: Device) => void;
+  /** A1: show Activate button for DEACTIVATED rows */
+  onActivate?: (device: Device) => void;
 }
 
-export default function DeviceTable({ devices, onEdit, onDeactivate }: DeviceTableProps) {
+export default function DeviceTable({ devices, onEdit, onDeactivate, onActivate }: DeviceTableProps) {
   if (devices.length === 0) {
     return <div className="empty-state">No devices found.</div>;
   }
 
-  const showActions = onEdit || onDeactivate;
+  const showActions = onEdit || onDeactivate || onActivate;
 
   return (
     <div className="data-table-wrapper">
@@ -30,12 +30,18 @@ export default function DeviceTable({ devices, onEdit, onDeactivate }: DeviceTab
         </thead>
         <tbody>
           {devices.map((d) => (
-            <tr key={d.deviceId}>
+            <tr key={d.id}>
               <td className="mono">{d.serialNumber}</td>
               <td className="mono">{d.ipAddress}</td>
               <td>{d.deviceType}</td>
               <td>
-                <span className={d.deviceState === 'ACTIVATED' ? 'state-tag state-tag-active' : 'state-tag state-tag-inactive'}>
+                <span
+                  className={
+                    d.deviceState === 'ACTIVATED'
+                      ? 'state-tag state-tag-active'
+                      : 'state-tag state-tag-inactive'
+                  }
+                >
                   {d.deviceState}
                 </span>
               </td>
@@ -43,7 +49,12 @@ export default function DeviceTable({ devices, onEdit, onDeactivate }: DeviceTab
                 <td>
                   <div style={{ display: 'flex', gap: 8 }}>
                     {onEdit && (
-                      <button type="button" className="btn btn-ghost btn-small" onClick={() => onEdit(d)}>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-small"
+                        disabled={d.deviceState === 'DEACTIVATED'}
+                        onClick={() => onEdit(d)}
+                      >
                         Edit
                       </button>
                     )}
@@ -54,7 +65,17 @@ export default function DeviceTable({ devices, onEdit, onDeactivate }: DeviceTab
                         disabled={d.deviceState === 'DEACTIVATED'}
                         onClick={() => onDeactivate(d)}
                       >
-                        Delete
+                        Deactivate
+                      </button>
+                    )}
+                    {onActivate && (
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-small"
+                        disabled={d.deviceState === 'ACTIVATED'}
+                        onClick={() => onActivate(d)}
+                      >
+                        Activate
                       </button>
                     )}
                   </div>

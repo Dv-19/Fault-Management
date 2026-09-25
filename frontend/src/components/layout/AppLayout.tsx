@@ -2,7 +2,16 @@ import React, { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import ChangePasswordDialog from '../account/ChangePasswordDialog';
-import { BrandMark, LockIcon, LogoutIcon, ReportIcon, RouterIcon, AlarmIcon, UsersIcon } from './icons';
+import {
+  BrandMark,
+  LockIcon,
+  LogoutIcon,
+  ReportIcon,
+  RouterIcon,
+  AlarmIcon,
+  UsersIcon,
+  HomeIcon,
+} from './icons';
 import './layout.css';
 
 interface NavItem {
@@ -11,36 +20,44 @@ interface NavItem {
   icon: React.ReactNode;
 }
 
-// Nav labels match the SRS tab names exactly (US02 / US10 / US15). The
-// first entry in each list doubles as that role's "home" destination.
 const ROLE_LINKS: Record<string, NavItem[]> = {
   ADMIN: [
-    { to: '/admin/users', label: 'User Details', icon: <UsersIcon /> },
-    { to: '/admin/add-user', label: 'Add User', icon: <UsersIcon /> },
+    { to: '/admin/home',        label: 'Home',        icon: <HomeIcon /> },
+    { to: '/admin/users',       label: 'User Details',icon: <UsersIcon /> },
+    { to: '/admin/add-user',    label: 'Add User',    icon: <UsersIcon /> },
     { to: '/admin/delete-user', label: 'Delete User', icon: <UsersIcon /> },
-    { to: '/admin/report', label: 'Report', icon: <ReportIcon /> },
+    { to: '/admin/report',      label: 'Report',      icon: <ReportIcon /> },
   ],
   OPERATOR: [
-    { to: '/operator/devices', label: 'Device List', icon: <RouterIcon /> },
-    { to: '/operator/add-device', label: 'Add Device', icon: <RouterIcon /> },
-    { to: '/operator/edit-device', label: 'Edit Device', icon: <RouterIcon /> },
+    { to: '/operator/home',          label: 'Home',          icon: <HomeIcon /> },
+    { to: '/operator/devices',       label: 'Device List',   icon: <RouterIcon /> },
+    { to: '/operator/add-device',    label: 'Add Device',    icon: <RouterIcon /> },
+    { to: '/operator/edit-device',   label: 'Edit Device',   icon: <RouterIcon /> },
     { to: '/operator/delete-device', label: 'Delete Device', icon: <RouterIcon /> },
-    { to: '/operator/report', label: 'Report', icon: <ReportIcon /> },
+    { to: '/operator/report',        label: 'Report',        icon: <ReportIcon /> },
   ],
-  MANAGER: [{ to: '/manager/faults', label: 'Fault Handling', icon: <AlarmIcon /> }],
+  MANAGER: [
+    { to: '/manager/home',   label: 'Home',          icon: <HomeIcon /> },
+    { to: '/manager/faults', label: 'Fault Handling',icon: <AlarmIcon /> },
+    { to: '/manager/report', label: 'Report',        icon: <ReportIcon /> },
+  ],
 };
 
 const PAGE_TITLES: Record<string, string> = {
-  '/admin/users': 'User details',
-  '/admin/add-user': 'Add user',
-  '/admin/delete-user': 'Delete user',
-  '/admin/report': 'Report',
-  '/operator/devices': 'Device list',
+  '/admin/home':          'Home',
+  '/admin/users':         'User details',
+  '/admin/add-user':      'Add user',
+  '/admin/delete-user':   'Delete user',
+  '/admin/report':        'Report',
+  '/operator/home':       'Home',
+  '/operator/devices':    'Device list',
   '/operator/add-device': 'Add device',
-  '/operator/edit-device': 'Edit device',
-  '/operator/delete-device': 'Delete device',
-  '/operator/report': 'Report',
-  '/manager/faults': 'Fault handling',
+  '/operator/edit-device':'Edit device',
+  '/operator/delete-device':'Delete device',
+  '/operator/report':     'Report',
+  '/manager/home':        'Home',
+  '/manager/faults':      'Fault handling',
+  '/manager/report':      'Report',
 };
 
 function initials(username: string): string {
@@ -55,19 +72,17 @@ export default function AppLayout() {
 
   const links = user ? ROLE_LINKS[user.role] ?? [] : [];
   const pageTitle = PAGE_TITLES[location.pathname] ?? 'Fault Management Dashboard';
+  // Home is always first link
   const homePath = links[0]?.to ?? '/login';
 
   const handleLogout = async () => {
     await logout();
-    // US08: show a one-time "logged out" confirmation on the login screen.
     navigate('/login', { replace: true, state: { loggedOut: true } });
   };
 
   const handlePasswordChanged = async (message: string) => {
     setChangePasswordOpen(false);
     await logout();
-    // US09: "should be logged out of the application, and prompt Login
-    // page[US01] with a message."
     navigate('/login', { replace: true, state: { message } });
   };
 
@@ -81,7 +96,7 @@ export default function AppLayout() {
           aria-label="Go to home"
         >
           <BrandMark size={34} />
-          <div className="console-brand-text">
+          <div className="console-brand-text console-nav-label">
             <span className="console-brand-title">Fault Management</span>
             <span className="console-brand-subtitle">Network Operations Console</span>
           </div>
@@ -92,10 +107,13 @@ export default function AppLayout() {
             <NavLink
               key={link.to}
               to={link.to}
-              className={({ isActive }) => (isActive ? 'console-nav-link active' : 'console-nav-link')}
+              title={link.label}
+              className={({ isActive }) =>
+                isActive ? 'console-nav-link active' : 'console-nav-link'
+              }
             >
               <span className="console-nav-icon">{link.icon}</span>
-              <span>{link.label}</span>
+              <span className="console-nav-label">{link.label}</span>
             </NavLink>
           ))}
         </nav>
@@ -104,18 +122,26 @@ export default function AppLayout() {
           <div className="console-user">
             <div className="console-user-row">
               <span className="console-avatar">{initials(user.username)}</span>
-              <div className="console-user-meta">
+              <div className="console-user-meta console-nav-label">
                 <span className="console-username">{user.username}</span>
                 <span className="console-role-tag">{user.role}</span>
               </div>
             </div>
-            <button type="button" className="console-user-action" onClick={() => setChangePasswordOpen(true)}>
+            <button
+              type="button"
+              className="console-user-action"
+              onClick={() => setChangePasswordOpen(true)}
+            >
               <LockIcon size={16} />
-              <span>Change password</span>
+              <span className="console-nav-label">Change password</span>
             </button>
-            <button type="button" className="console-user-action console-logout" onClick={handleLogout}>
+            <button
+              type="button"
+              className="console-user-action console-logout"
+              onClick={handleLogout}
+            >
               <LogoutIcon size={16} />
-              <span>Log out</span>
+              <span className="console-nav-label">Log out</span>
             </button>
           </div>
         )}
@@ -125,7 +151,9 @@ export default function AppLayout() {
         <header className="console-topbar">
           <div>
             <p className="console-eyebrow">
-              {user?.role ? `${user.role.charAt(0)}${user.role.slice(1).toLowerCase()} workspace` : 'Workspace'}
+              {user?.role
+                ? `${user.role.charAt(0)}${user.role.slice(1).toLowerCase()} workspace`
+                : 'Workspace'}
             </p>
             <h1 className="console-page-title">{pageTitle}</h1>
           </div>

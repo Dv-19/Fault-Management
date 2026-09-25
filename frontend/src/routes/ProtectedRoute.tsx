@@ -4,16 +4,15 @@ import { useAuth } from '../context/AuthContext';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 
 /**
- * Route guards here are UX only, not security — the backend authorizes
- * every request by server-side session/role regardless of what this
- * component allows the user to click into.
+ * Redirects to /login if not authenticated.
+ * Route guards are UX only — the backend enforces auth on every request.
  */
 export default function ProtectedRoute() {
   const { user, isBootstrapping } = useAuth();
   const location = useLocation();
 
   if (isBootstrapping) {
-    return <LoadingSpinner label="Checking your session…" fullPage />;
+    return <LoadingSpinner label="Checking session…" fullPage />;
   }
 
   if (!user) {

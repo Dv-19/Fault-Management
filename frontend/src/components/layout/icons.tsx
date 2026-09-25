@@ -82,6 +82,14 @@ export function ChevronRightIcon({ size = 16 }: IconProps) {
   );
 }
 
+export function HomeIcon({ size = 18 }: IconProps) {
+  return (
+    <svg {...base(size)} aria-hidden="true">
+      <path d="M3 10.5L12 3l9 7.5V20a1 1 0 0 1-1 1H15v-6H9v6H4a1 1 0 0 1-1-1V10.5Z" />
+    </svg>
+  );
+}
+
 /** Sidebar/login brand mark — a simple monogram, not an image asset. */
 export function BrandMark({ size = 36 }: IconProps) {
   return (

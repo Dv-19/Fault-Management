@@ -1,7 +1,13 @@
+/**
+ * Operator — Edit Device (US13).
+ * PUT /api/devices  body: { serialNumber, newIpAddress }
+ * Only the IP can be changed — serial is the lookup key, type is read-only.
+ * Response carries no device payload — re-fetch the list after success.
+ */
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { deviceApi } from '../../api/deviceApi';
-import { Device, PageResponse } from '../../types/domain';
+import { Device } from '../../types/domain';
 import { isApiError } from '../../context/AuthContext';
 import DeviceTable from '../../components/devices/DeviceTable';
 import EditDeviceDialog from '../../components/devices/EditDeviceDialog';
@@ -9,12 +15,12 @@ import Pagination from '../../components/common/Pagination';
 import ErrorBanner from '../../components/common/ErrorBanner';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 
-const PAGE_SIZE = 10;
-
 export default function OperatorEditDevicePage() {
   const navigate = useNavigate();
-  const [pageData, setPageData] = useState<PageResponse<Device> | null>(null);
+
+  const [devices, setDevices] = useState<Device[]>([]);
   const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,10 +32,13 @@ export default function OperatorEditDevicePage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await deviceApi.list({ page: targetPage, size: PAGE_SIZE, state: 'ACTIVATED' });
-      setPageData(data);
+      const res = await deviceApi.list(targetPage, 'ACTIVATED');
+      const paged = res.data.data;
+      setDevices(paged.content);
+      setTotalPages(paged.totalPages);
     } catch (err) {
       setError(isApiError(err) ? err.message : 'Unable to load devices.');
+      setDevices([]);
     } finally {
       setLoading(false);
     }
@@ -39,54 +48,42 @@ export default function OperatorEditDevicePage() {
     loadDevices(page);
   }, [page, loadDevices]);
 
-  const handleConfirmEdit = async (originalSerialNumber: string, newSerialNumber: string, newIp: string) => {
+  const handleConfirmEdit = async (serialNumber: string, newIpAddress: string) => {
     setEditSubmitting(true);
     setEditFieldErrors({});
     try {
-      const payload = newSerialNumber !== originalSerialNumber
-        ? { serialNumber: newSerialNumber, ipAddress: newIp }
-        : { ipAddress: newIp };
-      await deviceApi.edit(originalSerialNumber, payload);
-      // US13: "navigate to the device list page[US11] automatically."
-      navigate('/operator/devices', { replace: true, state: { message: 'Device updated successfully' } });
+      await deviceApi.edit({ serialNumber, newIpAddress });
+      navigate('/operator/devices', {
+        replace: true,
+        state: { message: 'Device updated successfully.' },
+      });
     } catch (err) {
       if (isApiError(err)) {
         setError(err.message);
-        setEditFieldErrors(err.fieldErrors ?? {});
+        if (err.fieldErrors) setEditFieldErrors(err.fieldErrors);
       } else {
         setError('Unable to update device.');
       }
-    } finally {
       setEditSubmitting(false);
     }
   };
 
   return (
     <div>
-      <div className="page-header">
-        <h1>Edit device</h1>
-      </div>
       <ErrorBanner message={error} onDismiss={() => setError(null)} />
 
-      {loading && !pageData ? (
+      {loading && devices.length === 0 ? (
         <LoadingSpinner label="Loading devices…" />
       ) : (
         <>
           <DeviceTable
-            devices={pageData?.content ?? []}
+            devices={devices}
             onEdit={(d) => {
               setEditFieldErrors({});
               setEditTarget(d);
             }}
           />
-          {pageData && (
-            <Pagination
-              page={pageData.page}
-              totalPages={pageData.totalPages}
-              totalElements={pageData.totalElements}
-              onPageChange={setPage}
-            />
-          )}
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
         </>
       )}
 
@@ -95,7 +92,10 @@ export default function OperatorEditDevicePage() {
         submitting={editSubmitting}
         fieldErrors={editFieldErrors}
         onConfirm={handleConfirmEdit}
-        onCancel={() => setEditTarget(null)}
+        onCancel={() => {
+          setEditTarget(null);
+          setEditSubmitting(false);
+        }}
       />
     </div>
   );

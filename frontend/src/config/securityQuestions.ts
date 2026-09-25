@@ -1,18 +1,23 @@
-// US04: "Set of secret questions can be set pre-defined in the DB and view
-// as a drop down in this page." The backend doesn't have an endpoint to
-// fetch these yet, so this is a placeholder list — swap for a real
-// GET /api/security-questions call once the backend defines one, without
-// touching AddUserForm.
+/**
+ * SecretQuestion enum values with human-readable labels.
+ * Matches backend com.infy.enums.SecretQuestion exactly.
+ * No endpoint lists these — hard-coded per integration doc §8.8.
+ */
+import { SecretQuestion } from '../types/domain';
 
-export interface SecurityQuestion {
-  id: number;
-  text: string;
+export interface SecurityQuestionOption {
+  value: SecretQuestion;
+  label: string;
 }
 
-export const SECURITY_QUESTIONS: SecurityQuestion[] = [
-  { id: 1, text: 'What is your favorite color?' },
-  { id: 2, text: "What is your mother's maiden name?" },
-  { id: 3, text: 'What was the name of your first pet?' },
-  { id: 4, text: 'What city were you born in?' },
-  { id: 5, text: 'What is the name of your favorite teacher?' },
+export const SECURITY_QUESTIONS: SecurityQuestionOption[] = [
+  { value: 'FIRST_PET', label: "What was your first pet's name?" },
+  { value: 'BIRTH_CITY', label: 'What city were you born in?' },
+  { value: 'FAVOURITE_TEACHER', label: 'What is the name of your favourite teacher?' },
+  { value: 'MOTHERS_MAIDEN_NAME', label: "What is your mother's maiden name?" },
+  { value: 'FAVOURITE_BOOK', label: 'What is your favourite book?' },
 ];
+
+export function questionLabel(value: SecretQuestion): string {
+  return SECURITY_QUESTIONS.find((q) => q.value === value)?.label ?? value;
+}

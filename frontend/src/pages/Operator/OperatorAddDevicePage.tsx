@@ -1,3 +1,7 @@
+/**
+ * Operator — Add Device (US12).
+ * POST /api/devices
+ */
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { deviceApi, CreateDeviceRequest } from '../../api/deviceApi';
@@ -17,12 +21,14 @@ export default function OperatorAddDevicePage() {
     setFieldErrors({});
     try {
       await deviceApi.add(payload);
-      // US12: "navigate to the list of devices page[US11] automatically."
-      navigate('/operator/devices', { replace: true, state: { message: 'Device configured successfully' } });
+      navigate('/operator/devices', {
+        replace: true,
+        state: { message: 'Device added successfully.' },
+      });
     } catch (err) {
       if (isApiError(err)) {
         setError(err.message);
-        setFieldErrors(err.fieldErrors ?? {});
+        if (err.fieldErrors) setFieldErrors(err.fieldErrors);
       } else {
         setError('Unable to add device.');
       }
@@ -33,9 +39,6 @@ export default function OperatorAddDevicePage() {
 
   return (
     <div>
-      <div className="page-header">
-        <h1>Add device</h1>
-      </div>
       <ErrorBanner message={error} onDismiss={() => setError(null)} />
       <AddDeviceForm submitting={submitting} fieldErrors={fieldErrors} onSubmit={handleSubmit} />
     </div>

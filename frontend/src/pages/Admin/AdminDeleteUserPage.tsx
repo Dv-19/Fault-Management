@@ -1,7 +1,9 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+/**
+ * Admin — Delete (Deactivate) / Activate User (US06 + A1) + Search (A2).
+ */
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { userApi } from '../../api/userApi';
-import { PageResponse, UserSummary } from '../../types/domain';
+import { UserSummary } from '../../types/domain';
 import { isApiError } from '../../context/AuthContext';
 import UserTable from '../../components/users/UserTable';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
@@ -9,46 +11,61 @@ import Pagination from '../../components/common/Pagination';
 import ErrorBanner from '../../components/common/ErrorBanner';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 
-const PAGE_SIZE = 10;
+const DEBOUNCE_MS = 300;
+type ToggleAction = { user: UserSummary; action: 'activate' | 'deactivate' };
 
 export default function AdminDeleteUserPage() {
-  const navigate = useNavigate();
-  const [pageData, setPageData] = useState<PageResponse<UserSummary> | null>(null);
-  const [page, setPage] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [users, setUsers]                   = useState<UserSummary[]>([]);
+  const [page, setPage]                     = useState(0);
+  const [totalPages, setTotalPages]         = useState(0);
+  const [loading, setLoading]               = useState(true);
+  const [error, setError]                   = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  const [target, setTarget] = useState<UserSummary | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [searchInput, setSearchInput] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const loadUsers = useCallback(async (targetPage: number) => {
+  const [toggleTarget, setToggleTarget]     = useState<ToggleAction | null>(null);
+  const [submitting, setSubmitting]         = useState(false);
+
+  const handleSearchChange = (val: string) => {
+    setSearchInput(val);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => { setPage(0); setSearchQuery(val.trim()); }, DEBOUNCE_MS);
+  };
+
+  const loadUsers = useCallback(async (targetPage: number, query: string) => {
     setLoading(true);
     setError(null);
     try {
-      const data = await userApi.list(targetPage, PAGE_SIZE);
-      setPageData(data);
+      const res = await userApi.list(targetPage, query || undefined);
+      const paged = res.data.data;
+      setUsers(paged.content);
+      setTotalPages(paged.totalPages);
     } catch (err) {
       setError(isApiError(err) ? err.message : 'Unable to load users.');
+      setUsers([]);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    loadUsers(page);
-  }, [page, loadUsers]);
+  useEffect(() => { loadUsers(page, searchQuery); }, [page, searchQuery, loadUsers]);
 
   const handleConfirm = async () => {
-    if (!target) return;
+    if (!toggleTarget) return;
     setSubmitting(true);
     try {
-      await userApi.deactivate(target.userId);
-      setTarget(null);
-      // US06: "navigate to the user details tab page[US02], the user
-      // deletion should be reflected."
-      navigate('/admin/users', { replace: true, state: { message: 'User deactivated successfully' } });
+      const { user, action } = toggleTarget;
+      const res = action === 'activate'
+        ? await userApi.activate({ username: user.username })
+        : await userApi.deactivate({ username: user.username });
+      setToggleTarget(null);
+      setSuccessMessage(res.data.message || `User ${action}d.`);
+      await loadUsers(page, searchQuery);
     } catch (err) {
-      setError(isApiError(err) ? err.message : 'Unable to deactivate user.');
+      setError(isApiError(err) ? err.message : 'Unable to update user.');
     } finally {
       setSubmitting(false);
     }
@@ -56,36 +73,47 @@ export default function AdminDeleteUserPage() {
 
   return (
     <div>
-      <div className="page-header">
-        <h1>Delete user</h1>
-      </div>
       <ErrorBanner message={error} onDismiss={() => setError(null)} />
+      <ErrorBanner message={successMessage} tone="success" onDismiss={() => setSuccessMessage(null)} />
 
-      {loading && !pageData ? (
-        <LoadingSpinner label="Loading users…" />
-      ) : (
+      <div className="toolbar card" style={{ marginBottom: 'var(--space-4)' }}>
+        <div className="field" style={{ marginBottom: 0, flex: 1, maxWidth: 360 }}>
+          <label htmlFor="del-user-search">Search username</label>
+          <input id="del-user-search" placeholder="e.g. operator" value={searchInput}
+            maxLength={100} onChange={(e) => handleSearchChange(e.target.value)} />
+        </div>
+        {searchQuery && (
+          <button type="button" className="btn btn-ghost" style={{ alignSelf: 'flex-end' }}
+            onClick={() => { setSearchInput(''); setPage(0); setSearchQuery(''); }}>
+            Clear
+          </button>
+        )}
+      </div>
+
+      {loading && users.length === 0 ? <LoadingSpinner label="Loading users…" /> : (
         <>
-          <UserTable users={pageData?.content ?? []} onDeactivate={setTarget} />
-          {pageData && (
-            <Pagination
-              page={pageData.page}
-              totalPages={pageData.totalPages}
-              totalElements={pageData.totalElements}
-              onPageChange={setPage}
-            />
-          )}
+          <UserTable
+            users={users}
+            onDeactivate={(u) => setToggleTarget({ user: u, action: 'deactivate' })}
+            onActivate={(u) => setToggleTarget({ user: u, action: 'activate' })}
+          />
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
         </>
       )}
 
       <ConfirmDialog
-        open={!!target}
-        title={`Delete ${target?.username ?? ''}?`}
-        description="The user record is kept, but their state becomes Deactivated and they can no longer log in."
-        confirmLabel="Delete"
-        destructive
+        open={!!toggleTarget}
+        title={toggleTarget?.action === 'activate'
+          ? `Activate ${toggleTarget?.user.username ?? ''}?`
+          : `Deactivate ${toggleTarget?.user.username ?? ''}?`}
+        description={toggleTarget?.action === 'activate'
+          ? 'The user will be able to log in again.'
+          : 'The user record is kept but they can no longer log in.'}
+        confirmLabel={toggleTarget?.action === 'activate' ? 'Activate' : 'Deactivate'}
+        destructive={toggleTarget?.action === 'deactivate'}
         busy={submitting}
         onConfirm={handleConfirm}
-        onCancel={() => setTarget(null)}
+        onCancel={() => setToggleTarget(null)}
       />
     </div>
   );

@@ -1,3 +1,8 @@
+/**
+ * Admin — Add User (US04).
+ * POST /api/users
+ * On success redirects to /admin/users with a success banner.
+ */
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { userApi, CreateUserRequest } from '../../api/userApi';
@@ -17,13 +22,14 @@ export default function AdminAddUserPage() {
     setFieldErrors({});
     try {
       await userApi.create(payload);
-      // US04: "navigate to the list of user's page[US02] automatically
-      // where the newly added user details also should be visible."
-      navigate('/admin/users', { replace: true, state: { message: 'User added successfully' } });
+      navigate('/admin/users', {
+        replace: true,
+        state: { message: 'User added successfully.' },
+      });
     } catch (err) {
       if (isApiError(err)) {
         setError(err.message);
-        setFieldErrors(err.fieldErrors ?? {});
+        if (err.fieldErrors) setFieldErrors(err.fieldErrors);
       } else {
         setError('Unable to add user.');
       }
@@ -34,9 +40,6 @@ export default function AdminAddUserPage() {
 
   return (
     <div>
-      <div className="page-header">
-        <h1>Add user</h1>
-      </div>
       <ErrorBanner message={error} onDismiss={() => setError(null)} />
       <AddUserForm submitting={submitting} fieldErrors={fieldErrors} onSubmit={handleSubmit} />
     </div>

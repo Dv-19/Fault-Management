@@ -1,102 +1,177 @@
-import { API_BASE_URL } from '../config/env';
-import { ApiError } from '../types/domain';
+/**
+ * Central axios instance for all backend calls.
+ *
+ * Conventions (from frontend-backend-integration.md):
+ *  - Base URL: http://localhost:8765
+ *  - Every request must send credentials (JSESSIONID + XSRF-TOKEN cookies).
+ *  - CSRF: on every POST/PUT/DELETE, read the XSRF-TOKEN cookie and send it
+ *    as the X-XSRF-TOKEN header.
+ *  - Auth: server-side session cookie — no JWT, no Authorization header.
+ *  - 401 on a protected endpoint → session expired → redirect to login.
+ *  - Error shape: { timestamp, status, error, message, path }
+ *  - Success shape: { success, message, data }
+ */
+import axios, { AxiosError, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
+
+// ---------------------------------------------------------------------------
+// Instance
+// ---------------------------------------------------------------------------
+
+const apiClient = axios.create({
+  baseURL: process.env.REACT_APP_API_BASE_URL || 'http://localhost:8765',
+  withCredentials: true, // sends JSESSIONID + XSRF-TOKEN cookies cross-origin
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// ---------------------------------------------------------------------------
+// CSRF helper
+// ---------------------------------------------------------------------------
+
+function getCookie(name: string): string | null {
+  const match = document.cookie.split('; ').find((c) => c.startsWith(name + '='));
+  if (!match) return null;
+  return decodeURIComponent(match.split('=')[1]);
+}
 
 /**
- * Dispatched whenever a request comes back 401 so the rest of the app
- * (AuthContext) can clear user state and redirect to /login without this
- * module having to import React/router code.
+ * Attach X-XSRF-TOKEN on every state-changing request.
+ * GET/HEAD/OPTIONS are CSRF-exempt by Spring Security default.
  */
-const UNAUTHORIZED_EVENT = 'auth:unauthorized';
-
-function normalizeError(status: number, body: unknown): ApiError {
-  if (body && typeof body === 'object' && 'message' in (body as object)) {
-    const b = body as Partial<ApiError>;
-    return {
-      status,
-      code: b.code ?? 'UNKNOWN_ERROR',
-      message: b.message ?? 'Something went wrong. Please try again.',
-      fieldErrors: b.fieldErrors,
-      timestamp: b.timestamp,
-    };
-  }
-  return {
-    status,
-    code: 'UNKNOWN_ERROR',
-    message: 'Something went wrong. Please try again.',
-  };
-}
-
-/**
- * CSRF handling is centralized here, deliberately left as a no-op until the
- * backend confirms the token/header mechanism (integration doc, section on
- * CSRF). Once confirmed, read the cookie here and set the header below —
- * no feature component should need to change.
- */
-function applyCsrfHeader(_headers: Headers): void {
-  // Example once confirmed:
-  // const token = readCookie('XSRF-TOKEN');
-  // if (token) headers.set('X-XSRF-TOKEN', token);
-}
-
-export interface ApiFetchOptions extends RequestInit {
-  /** Query params to append, if any. */
-  params?: Record<string, string | number | boolean | undefined | null>;
-}
-
-function buildUrl(path: string, params?: ApiFetchOptions['params']): string {
-  const url = new URL(`${API_BASE_URL}${path}`, window.location.origin);
-  if (params) {
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== '') {
-        url.searchParams.set(key, String(value));
-      }
-    });
-  }
-  // Return path+search only when API_BASE_URL is relative-friendly; using
-  // the full href keeps this correct whether API_BASE_URL is absolute.
-  return url.toString();
-}
-
-export async function apiFetch<T>(path: string, init: ApiFetchOptions = {}): Promise<T> {
-  const { params, ...rest } = init;
-  const headers = new Headers(rest.headers);
-  headers.set('Accept', 'application/json');
-  if (rest.body && !headers.has('Content-Type')) {
-    headers.set('Content-Type', 'application/json');
-  }
-  applyCsrfHeader(headers);
-
-  const response = await fetch(buildUrl(path, params), {
-    ...rest,
-    credentials: 'include',
-    headers,
-  });
-
-  if (response.status === 401) {
-    window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT));
-  }
-
-  if (!response.ok) {
-    let body: unknown = null;
-    try {
-      body = await response.json();
-    } catch {
-      // body wasn't JSON; fall through to the generic error
+apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  const method = config.method?.toUpperCase() ?? '';
+  if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+    const token = getCookie('XSRF-TOKEN');
+    if (token) {
+      config.headers['X-XSRF-TOKEN'] = token;
     }
-    throw normalizeError(response.status, body);
   }
+  return config;
+});
 
-  if (response.status === 204) {
-    return undefined as T;
-  }
+// ---------------------------------------------------------------------------
+// 401 broadcast — AuthContext listens for this to clear user state
+// ---------------------------------------------------------------------------
 
-  // Some endpoints (e.g. XML import) never go through this client; every
-  // JSON endpoint in this app is safe to parse directly.
-  return (await response.json()) as Promise<T>;
-}
+const UNAUTHORIZED_EVENT = 'auth:unauthorized';
 
 export function onUnauthorized(handler: () => void): () => void {
   const listener = () => handler();
   window.addEventListener(UNAUTHORIZED_EVENT, listener);
   return () => window.removeEventListener(UNAUTHORIZED_EVENT, listener);
 }
+
+// ---------------------------------------------------------------------------
+// Response interceptor — normalize errors + 403 CSRF retry
+// ---------------------------------------------------------------------------
+
+/**
+ * On a 403 the backend cannot distinguish a CSRF token failure from a
+ * genuine "wrong role" rejection (both return the same status + message).
+ * Strategy (integration doc §2.2): refresh the CSRF cookie once and retry
+ * the original request exactly once. If the retry is also 403, surface it
+ * as a permission error.
+ */
+let csrfRetryInProgress = false;
+
+apiClient.interceptors.response.use(
+  (response: AxiosResponse) => response,
+  async (error: AxiosError<BackendError>) => {
+    const status = error.response?.status;
+
+    if (status === 401) {
+      window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT));
+    }
+
+    if (status === 403 && !csrfRetryInProgress && error.config) {
+      csrfRetryInProgress = true;
+      try {
+        // Refresh the XSRF-TOKEN cookie
+        await apiClient.get('/api/auth/csrf');
+        // Retry the original request once with the fresh token
+        const retryConfig = { ...error.config, _csrfRetry: true };
+        const retryResponse = await apiClient.request(retryConfig);
+        return retryResponse;
+      } catch (retryError) {
+        // Retry also failed — fall through and surface as permission error
+        return Promise.reject(normalizeError(retryError as AxiosError<BackendError>));
+      } finally {
+        csrfRetryInProgress = false;
+      }
+    }
+
+    return Promise.reject(normalizeError(error));
+  },
+);
+
+// ---------------------------------------------------------------------------
+// Error normalization
+// ---------------------------------------------------------------------------
+
+export interface ApiError {
+  status: number;
+  message: string;
+  fieldErrors?: Record<string, string>;
+}
+
+interface BackendError {
+  status?: number;
+  message?: string;
+  error?: string;
+  timestamp?: string;
+  path?: string;
+}
+
+/**
+ * Parse the backend's ErrorResponseDto into a plain ApiError.
+ * Also parse bean-validation field errors from the "; "-joined message format:
+ *   "username: Username is required; password: Password is required"
+ */
+function normalizeError(error: AxiosError<BackendError>): ApiError {
+  if (!error.response) {
+    return {
+      status: 0,
+      message: 'Unable to reach the server. Please try again.',
+    };
+  }
+
+  const { status, data } = error.response;
+  const message = data?.message ?? 'Something went wrong. Please try again.';
+
+  // Try to parse field errors out of the "; "-joined validation message
+  const fieldErrors: Record<string, string> = {};
+  if (status === 400 && message.includes(': ')) {
+    message.split('; ').forEach((part) => {
+      const colonIdx = part.indexOf(': ');
+      if (colonIdx !== -1) {
+        const field = part.substring(0, colonIdx).trim();
+        const text = part.substring(colonIdx + 2).trim();
+        // Skip query-param validation messages like "getAllUsers.page: ..."
+        if (!field.includes('.')) {
+          fieldErrors[field] = text;
+        }
+      }
+    });
+  }
+
+  return {
+    status,
+    message,
+    fieldErrors: Object.keys(fieldErrors).length > 0 ? fieldErrors : undefined,
+  };
+}
+
+export function isApiError(value: unknown): value is ApiError {
+  return typeof value === 'object' && value !== null && 'message' in value && 'status' in value;
+}
+
+// ---------------------------------------------------------------------------
+// CSRF bootstrap — call once at app start before the first POST
+// ---------------------------------------------------------------------------
+
+export async function initCsrf(): Promise<void> {
+  await apiClient.get('/api/auth/csrf');
+}
+
+export default apiClient;

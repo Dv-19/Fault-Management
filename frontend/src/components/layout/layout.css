@@ -1,11 +1,21 @@
+/* ==========================================================================
+   Console Shell — collapsible sidebar layout
+   Desktop  : sidebar collapses to 64px (icons only), expands to 240px on hover
+   Tablet   : sidebar is a 56px icon rail, always visible on left
+   Mobile   : bottom tab bar
+   ========================================================================== */
+
+/* ── Shell ─────────────────────────────────────────────────────────────── */
+
 .console-shell {
   min-height: 100%;
   display: flex;
 }
 
-/* ---------- sidebar ---------- */
+/* ── Sidebar ───────────────────────────────────────────────────────────── */
+
 .console-sidebar {
-  width: 248px;
+  width: 64px;              /* collapsed width */
   flex-shrink: 0;
   background: var(--color-sidebar);
   color: rgba(255, 255, 255, 0.92);
@@ -14,13 +24,23 @@
   position: sticky;
   top: 0;
   height: 100vh;
+  overflow: hidden;
+  transition: width 220ms cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 30;
 }
+
+/* Expand on hover */
+.console-sidebar:hover {
+  width: 240px;
+}
+
+/* ── Brand button ──────────────────────────────────────────────────────── */
 
 .console-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 20px 18px;
+  gap: 12px;
+  padding: 18px 15px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   background: none;
   border-left: none;
@@ -31,121 +51,142 @@
   cursor: pointer;
   color: inherit;
   font-family: inherit;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .console-brand:hover {
   background: rgba(255, 255, 255, 0.04);
 }
-.console-brand-text {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.25;
-}
-.console-brand-title {
-  font-weight: 700;
-  font-size: 0.92rem;
-  letter-spacing: 0.01em;
-}
-.console-brand-subtitle {
-  font-size: 0.72rem;
-  color: rgba(255, 255, 255, 0.55);
-}
+
+/* ── Nav ───────────────────────────────────────────────────────────────── */
 
 .console-nav {
-  padding: 14px 10px;
+  padding: 12px 8px;
   display: flex;
   flex-direction: column;
   gap: 2px;
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
 }
+
 .console-nav-link {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 9px 12px;
+  gap: 12px;
+  padding: 10px 12px;
   border-radius: var(--radius-sm);
-  color: rgba(255, 255, 255, 0.72);
+  color: rgba(255, 255, 255, 0.65);
   text-decoration: none;
-  font-size: 0.88rem;
+  font-size: 0.875rem;
   border-left: 3px solid transparent;
-}
-.console-nav-icon {
-  display: inline-flex;
-  color: inherit;
+  white-space: nowrap;
+  min-width: 0;
 }
 .console-nav-link:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.07);
   color: #fff;
 }
 .console-nav-link.active {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.11);
   color: #fff;
   border-left-color: var(--color-accent-light);
 }
 
+.console-nav-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: inherit;
+}
+
+/* Labels hidden when collapsed, visible when sidebar is wide enough */
+.console-nav-label {
+  overflow: hidden;
+  opacity: 0;
+  max-width: 0;
+  transition: opacity 160ms ease, max-width 160ms ease;
+  white-space: nowrap;
+}
+
+.console-sidebar:hover .console-nav-label {
+  opacity: 1;
+  max-width: 180px;
+}
+
+/* ── User section ──────────────────────────────────────────────────────── */
+
 .console-user {
   border-top: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 14px 16px 18px;
+  padding: 12px 8px 14px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
+  overflow: hidden;
 }
+
 .console-user-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 6px;
+  padding: 6px 12px;
+  white-space: nowrap;
 }
+
 .console-avatar {
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: var(--color-accent);
   color: #fff;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 700;
   flex-shrink: 0;
 }
+
 .console-user-meta {
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
+
 .console-username {
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   font-weight: 600;
   color: #fff;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
 .console-role-tag {
   align-self: flex-start;
   margin-top: 2px;
-  font-size: 0.66rem;
+  font-size: 0.64rem;
   letter-spacing: 0.04em;
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(255, 255, 255, 0.55);
   background: rgba(255, 255, 255, 0.08);
   padding: 1px 6px;
   border-radius: 999px;
 }
+
 .console-user-action {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.65);
-  text-decoration: none;
+  gap: 12px;
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.6);
   background: none;
   border: none;
-  padding: 6px 4px;
+  padding: 8px 12px;
   cursor: pointer;
   border-radius: var(--radius-sm);
   text-align: left;
   font-family: inherit;
+  white-space: nowrap;
+  width: 100%;
 }
 .console-user-action:hover {
   color: #fff;
@@ -155,12 +196,32 @@
   color: #ffb4b0;
 }
 
-/* ---------- main area ---------- */
+/* ── Brand text styles (used inside .console-nav-label) ─────────────────── */
+
+.console-brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
+.console-brand-title {
+  font-weight: 700;
+  font-size: 0.9rem;
+  letter-spacing: 0.01em;
+  color: #fff;
+}
+.console-brand-subtitle {
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* ── Main content area ─────────────────────────────────────────────────── */
+
 .console-main {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
+  /* Prevents content jumping when sidebar expands — sidebar is sticky/overlapping */
 }
 
 .console-topbar {
@@ -169,32 +230,36 @@
   z-index: 10;
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
-  padding: 16px 28px;
+  padding: 14px 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
 }
+
 .console-eyebrow {
   margin: 0 0 2px;
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   font-weight: 600;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--color-text-muted);
 }
+
 .console-page-title {
   margin: 0;
-  font-size: 1.3rem;
+  font-size: 1.25rem;
 }
+
 .console-topbar-status {
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: var(--color-text-muted);
   white-space: nowrap;
 }
+
 .console-live-dot {
   width: 8px;
   height: 8px;
@@ -210,47 +275,140 @@
   width: 100%;
 }
 
-@media (max-width: 860px) {
+/* ── Tablet (≤ 900px): always-icon rail ─────────────────────────────────── */
+
+@media (max-width: 900px) {
   .console-sidebar {
-    position: fixed;
-    left: 0;
-    bottom: 0;
-    top: auto;
-    height: auto;
-    width: 100%;
-    flex-direction: row;
-    align-items: center;
-    padding: 0;
-    z-index: 20;
+    width: 56px;
   }
-  .console-brand,
-  .console-user {
-    display: none;
+  .console-sidebar:hover {
+    width: 220px;
   }
-  .console-nav {
-    flex-direction: row;
-    padding: 6px 8px;
-    overflow-x: auto;
+  .console-brand {
+    padding: 16px 12px;
   }
   .console-nav-link {
-    flex-direction: column;
-    gap: 2px;
-    font-size: 0.68rem;
-    border-left: none;
-    border-top: 3px solid transparent;
-    white-space: nowrap;
-  }
-  .console-nav-link.active {
-    border-top-color: var(--color-accent-light);
-    border-left-color: transparent;
-  }
-  .console-main {
-    padding-bottom: 64px;
+    padding: 10px 10px;
   }
   .console-content {
     padding: 18px 16px 32px;
   }
   .console-topbar {
-    padding: 14px 16px;
+    padding: 12px 16px;
   }
+}
+
+/* ── Mobile (≤ 600px): bottom tab bar ───────────────────────────────────── */
+
+@media (max-width: 600px) {
+  .console-shell {
+    flex-direction: column;
+  }
+
+  .console-sidebar {
+    /* Reset all desktop sidebar styles */
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    top: auto;
+    width: 100% !important;   /* override hover width */
+    height: auto;
+    flex-direction: row;
+    align-items: stretch;
+    overflow: visible;
+    transition: none;
+    z-index: 40;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  /* Hide brand + user on mobile bottom bar */
+  .console-brand,
+  .console-user {
+    display: none;
+  }
+
+  .console-nav {
+    flex-direction: row;
+    padding: 0;
+    overflow-x: auto;
+    overflow-y: visible;
+    gap: 0;
+    flex: 1;
+  }
+
+  .console-nav-link {
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 8px 4px;
+    border-left: none;
+    border-top: 2px solid transparent;
+    border-radius: 0;
+    font-size: 0.62rem;
+    white-space: nowrap;
+    min-width: 52px;
+  }
+  .console-nav-link.active {
+    border-top-color: var(--color-accent-light);
+    border-left-color: transparent;
+    background: rgba(255, 255, 255, 0.07);
+  }
+
+  /* Show labels on mobile tab bar always */
+  .console-nav-label {
+    opacity: 1 !important;
+    max-width: 100% !important;
+    font-size: 0.6rem;
+  }
+
+  /* Push main content above tab bar */
+  .console-main {
+    padding-bottom: 60px;
+  }
+
+  .console-content {
+    padding: 16px 14px 24px;
+  }
+
+  .console-topbar {
+    padding: 12px 14px;
+  }
+}
+
+/* ── Live indicator (ManagerFaultsPage) ─────────────────────────────────── */
+
+.live-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-success);
+  margin-bottom: var(--space-3);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.live-indicator-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-success);
+  flex-shrink: 0;
+  animation: live-pulse 2s ease-in-out infinite;
+}
+
+@keyframes live-pulse {
+  0%, 100% { box-shadow: 0 0 0 0   rgba(31, 122, 77, 0.5); }
+  50%       { box-shadow: 0 0 0 5px rgba(31, 122, 77, 0);   }
+}
+
+.live-indicator-time {
+  font-weight: 400;
+  color: var(--color-text-muted);
+  text-transform: none;
+  letter-spacing: 0;
 }

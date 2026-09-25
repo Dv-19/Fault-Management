@@ -1,31 +1,57 @@
-import { apiFetch } from './apiClient';
-import { ApiMessage, PageResponse, Role, UserSummary } from '../types/domain';
+/**
+ * User management API — ADMIN only.
+ *
+ * GET  /api/users?page={n}&search={q}  — PagedResponse<UserSummary>
+ * POST /api/users
+ * PUT  /api/users/role
+ * PUT  /api/users/deactivate
+ * PUT  /api/users/activate              (A1)
+ */
+import apiClient from './apiClient';
+import { ApiResponse, PagedResponse, Role, SecretQuestion, UserSummary } from '../types/domain';
 
 export interface CreateUserRequest {
   username: string;
   password: string;
-  confirmPassword: string;
   role: Role;
-  securityQuestionId: number;
-  securityAnswer: string;
+  secretQuestion: SecretQuestion;
+  secretAnswer: string;
+}
+
+export interface ChangeRoleRequest {
+  username: string;
+  newRole: Role;
+}
+
+export interface DeactivateUserRequest {
+  username: string;
+}
+
+export interface ActivateUserRequest {
+  username: string;
 }
 
 export const userApi = {
-  list: (page: number, size = 10) =>
-    apiFetch<PageResponse<UserSummary>>('/api/users', { params: { page, size } }),
+  /**
+   * GET /api/users?page={n}&search={q}
+   * Returns PagedResponse<UserSummary> — use content[], totalPages, totalElements.
+   * search is optional: case-insensitive partial match on username.
+   */
+  list: (page: number, search?: string) =>
+    apiClient.get<ApiResponse<PagedResponse<UserSummary>>>('/api/users', {
+      params: { page, ...(search ? { search } : {}) },
+    }),
 
   create: (payload: CreateUserRequest) =>
-    apiFetch<ApiMessage>('/api/users', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }),
+    apiClient.post<ApiResponse<UserSummary>>('/api/users', payload),
 
-  changeRole: (username: string, role: Role) =>
-    apiFetch<ApiMessage>(`/api/users/${encodeURIComponent(username)}/role`, {
-      method: 'PUT',
-      body: JSON.stringify({ role }),
-    }),
+  changeRole: (payload: ChangeRoleRequest) =>
+    apiClient.put<ApiResponse<null>>('/api/users/role', payload),
 
-  deactivate: (userId: number) =>
-    apiFetch<ApiMessage>(`/api/users/${userId}/deactivate`, { method: 'PATCH' }),
+  deactivate: (payload: DeactivateUserRequest) =>
+    apiClient.put<ApiResponse<null>>('/api/users/deactivate', payload),
+
+  /** A1 — reactivate a DEACTIVATED user */
+  activate: (payload: ActivateUserRequest) =>
+    apiClient.put<ApiResponse<null>>('/api/users/activate', payload),
 };

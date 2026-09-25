@@ -1,16 +1,31 @@
+/**
+ * Fault filter bar.
+ * Integration doc §7.2:
+ *  - All filters combine with AND.
+ *  - Default (no status filter) hides TERMINATED alarms.
+ *  - Pass status=TERMINATED to reveal them.
+ *  - Omit a filter entirely (don't send empty string) — handled in ManagerFaultsPage.
+ *
+ * Enum values populated from dropdowns only to avoid 500s from unknown enum strings.
+ */
 import React from 'react';
-import { FaultStatus } from '../../types/domain';
+import { AlarmStatus, Severity } from '../../types/domain';
 
 export interface FaultFilterState {
-  severity: string;
-  status: FaultStatus | '';
-  search: string;
+  deviceIp: string;
+  severity: Severity | '';
+  /** Empty string = default (TERMINATED hidden). 'TERMINATED' reveals them. */
+  status: AlarmStatus | '';
 }
 
-const SEVERITY_OPTIONS = ['', 'CLEAR', 'WARNING', 'MAJOR', 'SEVERE', 'CRITICAL'];
-// Terminated is intentionally excluded — the active table must never show
-// terminated faults (integration doc, section 8.1).
-const STATUS_OPTIONS: (FaultStatus | '')[] = ['', 'OPEN', 'ACKNOWLEDGED', 'CLEARED'];
+const SEVERITY_OPTIONS: (Severity | '')[] = ['', 'CLEAR', 'WARNING', 'MAJOR', 'SEVERE', 'CRITICAL'];
+const STATUS_OPTIONS: (AlarmStatus | '')[] = [
+  '',
+  'UNACKNOWLEDGED',
+  'ACKNOWLEDGED',
+  'CLEARED',
+  'TERMINATED',
+];
 
 export default function FaultFilters({
   value,
@@ -20,13 +35,23 @@ export default function FaultFilters({
   onChange: (next: FaultFilterState) => void;
 }) {
   return (
-    <div className="toolbar card">
+    <div className="toolbar card" style={{ marginBottom: 'var(--space-4)' }}>
       <div className="field" style={{ marginBottom: 0 }}>
-        <label htmlFor="fault-severity">Severity</label>
+        <label htmlFor="filter-ip">Device IP</label>
+        <input
+          id="filter-ip"
+          placeholder="e.g. 192.168.1.10"
+          value={value.deviceIp}
+          onChange={(e) => onChange({ ...value, deviceIp: e.target.value })}
+        />
+      </div>
+
+      <div className="field" style={{ marginBottom: 0 }}>
+        <label htmlFor="filter-severity">Severity</label>
         <select
-          id="fault-severity"
+          id="filter-severity"
           value={value.severity}
-          onChange={(e) => onChange({ ...value, severity: e.target.value })}
+          onChange={(e) => onChange({ ...value, severity: e.target.value as Severity | '' })}
         >
           {SEVERITY_OPTIONS.map((s) => (
             <option key={s || 'any'} value={s}>
@@ -35,28 +60,20 @@ export default function FaultFilters({
           ))}
         </select>
       </div>
+
       <div className="field" style={{ marginBottom: 0 }}>
-        <label htmlFor="fault-status">Status</label>
+        <label htmlFor="filter-status">Status</label>
         <select
-          id="fault-status"
+          id="filter-status"
           value={value.status}
-          onChange={(e) => onChange({ ...value, status: e.target.value as FaultStatus | '' })}
+          onChange={(e) => onChange({ ...value, status: e.target.value as AlarmStatus | '' })}
         >
           {STATUS_OPTIONS.map((s) => (
-            <option key={s || 'any'} value={s}>
-              {s || 'Any'}
+            <option key={s || 'default'} value={s}>
+              {s === '' ? 'Active (excl. Terminated)' : s}
             </option>
           ))}
         </select>
-      </div>
-      <div className="field" style={{ marginBottom: 0, flex: 1, minWidth: 200 }}>
-        <label htmlFor="fault-search">Search</label>
-        <input
-          id="fault-search"
-          placeholder="Device IP, serial, alarm name…"
-          value={value.search}
-          onChange={(e) => onChange({ ...value, search: e.target.value })}
-        />
       </div>
     </div>
   );

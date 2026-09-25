@@ -1,17 +1,25 @@
 import React from 'react';
 import './common.css';
 
+interface LoadingSpinnerProps {
+  label?: string;
+  fullPage?: boolean;
+}
+
 export default function LoadingSpinner({
   label = 'Loading…',
   fullPage = false,
-}: {
-  label?: string;
-  fullPage?: boolean;
-}) {
-  return (
-    <div className={fullPage ? 'spinner-fullpage' : 'spinner-inline'} role="status" aria-live="polite">
+}: LoadingSpinnerProps) {
+  const content = (
+    <div className="spinner-wrap" aria-live="polite" aria-label={label}>
       <span className="spinner" aria-hidden="true" />
-      <span>{label}</span>
+      <span className="spinner-label">{label}</span>
     </div>
   );
+
+  if (fullPage) {
+    return <div className="spinner-fullpage">{content}</div>;
+  }
+
+  return content;
 }

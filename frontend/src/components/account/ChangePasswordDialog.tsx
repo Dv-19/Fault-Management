@@ -1,41 +1,42 @@
+/**
+ * Change Password dialog (US09).
+ * PUT /api/users/change-password
+ *
+ * Integration doc §4.1:
+ *  - Wrong current password → 401. Must NOT trigger global "session expired"
+ *    logout — handled locally here by reading response.status directly.
+ *  - On success the backend keeps the session alive, but the frontend
+ *    should logout and redirect to /login (caller handles this via onSuccess).
+ */
 import React, { useState } from 'react';
 import { authApi } from '../../api/authApi';
-import { isApiError } from '../../context/AuthContext';
 import ErrorBanner from '../common/ErrorBanner';
+import PasswordStrengthBar from '../common/PasswordStrengthBar';
 
-interface ChangePasswordDialogProps {
+interface Props {
   open: boolean;
   onClose: () => void;
   /** Called after a successful change — caller handles logout + redirect. */
   onSuccess: (message: string) => void;
 }
 
-/**
- * US09: "When clicked on change password button, then a pop [up] should
- * display, asking the details of Current Password, New Password and
- * Retype New Password with a captcha." A real captcha provider isn't named
- * in the SRS, so `captchaResponse` is a plain text stand-in — swap the
- * input for a real widget later without touching the request shape.
- */
-export default function ChangePasswordDialog({ open, onClose, onSuccess }: ChangePasswordDialogProps) {
+export default function ChangePasswordDialog({ open, onClose, onSuccess }: Props) {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [captchaResponse, setCaptchaResponse] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   if (!open) return null;
 
-  const clearSensitiveFields = () => {
+  const clearFields = () => {
     setCurrentPassword('');
     setNewPassword('');
     setConfirmPassword('');
-    setCaptchaResponse('');
   };
 
   const handleClose = () => {
-    clearSensitiveFields();
+    clearFields();
     setError(null);
     onClose();
   };
@@ -43,28 +44,29 @@ export default function ChangePasswordDialog({ open, onClose, onSuccess }: Chang
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-
-    // Only current password is checked server-side after submit; the rest
-    // is validated here first, per the SRS's front-end/back-end split.
-    if (newPassword !== confirmPassword) {
-      setError('Password provided are not same');
-      return;
-    }
-    if (!captchaResponse.trim()) {
-      setError('Captcha is required');
-      return;
-    }
-
     setSubmitting(true);
     try {
-      await authApi.changePassword({ currentPassword, newPassword, confirmPassword, captchaResponse });
-      clearSensitiveFields();
-      onSuccess('Password changed successfully, Please login again');
-    } catch (err) {
-      // Backend owns the exact wording for "Current password is not valid",
-      // "Password Requirement is not matched", etc.
-      setError(isApiError(err) ? err.message : 'Unable to change password. Please try again.');
-      clearSensitiveFields();
+      // validateStatus: () => true means axios never rejects — we check
+      // response.status ourselves so 401 (wrong current password) does NOT
+      // fire the global auth:unauthorized event and log the user out.
+      const res = await authApi.changePassword({
+        currentPassword,
+        newPassword,
+        confirmPassword,
+      });
+
+      if (res.status >= 200 && res.status < 300) {
+        clearFields();
+        onSuccess(res.data.message || 'Password changed successfully. Please log in again.');
+      } else {
+        // 400 validation, 401 wrong password, etc. — show the server message
+        const errData = res.data as unknown as { message?: string };
+        setError(errData?.message ?? 'Unable to change password. Please try again.');
+        clearFields();
+      }
+    } catch {
+      setError('Unable to reach the server. Please try again.');
+      clearFields();
     } finally {
       setSubmitting(false);
     }
@@ -72,7 +74,12 @@ export default function ChangePasswordDialog({ open, onClose, onSuccess }: Chang
 
   return (
     <div className="dialog-overlay" role="presentation" onClick={handleClose}>
-      <div className="dialog" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="dialog"
+        role="dialog"
+        aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
+      >
         <h2>Change password</h2>
         <ErrorBanner message={error} onDismiss={() => setError(null)} />
         <form onSubmit={handleSubmit} noValidate>
@@ -83,6 +90,7 @@ export default function ChangePasswordDialog({ open, onClose, onSuccess }: Chang
               type="password"
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
+              autoComplete="current-password"
               required
             />
           </div>
@@ -93,35 +101,29 @@ export default function ChangePasswordDialog({ open, onClose, onSuccess }: Chang
               type="password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
+              autoComplete="new-password"
               required
             />
-            <span className="field-hint">
-              Upper &amp; lower case, a number, and one of @#$%&amp;*!^ — 4-6 chars is Weak, 6-8 is
-              Medium, 8+ is Strong.
-            </span>
+            <PasswordStrengthBar password={newPassword} />
           </div>
           <div className="field">
-            <label htmlFor="cp-confirm">Retype new password</label>
+            <label htmlFor="cp-confirm">Confirm new password</label>
             <input
               id="cp-confirm"
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="cp-captcha">Captcha</label>
-            <input
-              id="cp-captcha"
-              value={captchaResponse}
-              onChange={(e) => setCaptchaResponse(e.target.value)}
-              placeholder="Placeholder until a captcha provider is wired in"
+              autoComplete="new-password"
               required
             />
           </div>
           <div className="dialog-actions">
-            <button type="button" className="btn btn-ghost" onClick={handleClose} disabled={submitting}>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={handleClose}
+              disabled={submitting}
+            >
               Cancel
             </button>
             <button type="submit" className="btn btn-primary" disabled={submitting}>

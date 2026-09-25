@@ -1,6 +1,16 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { faultApi } from '../../api/faultApi';
-import { Fault, PageResponse } from '../../types/domain';
+/**
+ * Manager — Fault Handling (US15–US19).
+ *
+ * Live updates via smart polling (every 15 s).
+ *   • Completely silent — no spinner, no controls shown to user.
+ *   • Selected rows preserved across polls (keyed by alarm id).
+ *   • Pauses automatically while a confirm dialog is open.
+ *   • 401 on any fetch → redirect to login.
+ */
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { faultApi, ListAlarmsParams } from '../../api/faultApi';
+import { Alarm, AlarmStatus, Severity } from '../../types/domain';
 import { isApiError } from '../../context/AuthContext';
 import FaultFilters, { FaultFilterState } from '../../components/faults/FaultFilters';
 import FaultTable from '../../components/faults/FaultTable';
@@ -9,93 +19,122 @@ import Pagination from '../../components/common/Pagination';
 import ErrorBanner from '../../components/common/ErrorBanner';
 import LoadingSpinner from '../../components/common/LoadingSpinner';
 
-const PAGE_SIZE = 20;
+const POLL_MS = 15_000;
 
 type LifecycleAction = 'acknowledge' | 'clear' | 'terminate';
-type BulkAction = 'acknowledge' | 'clear';
-
-interface PendingSingleAction {
-  type: LifecycleAction;
-  fault: Fault;
-}
+type BulkAction      = 'acknowledge' | 'clear';
+interface PendingSingle { type: LifecycleAction; alarm: Alarm; }
 
 export default function ManagerFaultsPage() {
-  const [filters, setFilters] = useState<FaultFilterState>({ severity: '', status: '', search: '' });
-  const [page, setPage] = useState(0);
-  const [pageData, setPageData] = useState<PageResponse<Fault> | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const navigate = useNavigate();
 
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [pendingSingle, setPendingSingle] = useState<PendingSingleAction | null>(null);
-  const [pendingBulk, setPendingBulk] = useState<BulkAction | null>(null);
+  const [filters, setFilters]       = useState<FaultFilterState>({ deviceIp: '', severity: '', status: '' });
+  const [page, setPage]             = useState(0);
+  const [alarms, setAlarms]         = useState<Alarm[]>([]);
+  const [totalPages, setTotalPages] = useState(0);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [lastRefreshed, setLastRefreshed]   = useState<Date | null>(null);
+
+  const [selectedIds, setSelectedIds]     = useState<Set<number>>(new Set());
+  const [pendingSingle, setPendingSingle] = useState<PendingSingle | null>(null);
+  const [pendingBulk, setPendingBulk]     = useState<BulkAction | null>(null);
   const [actionSubmitting, setActionSubmitting] = useState(false);
 
-  const loadFaults = useCallback(
-    async (targetPage: number) => {
-      setLoading(true);
-      setError(null);
-      try {
-        const data = await faultApi.list({
-          page: targetPage,
-          size: PAGE_SIZE,
-          severity: filters.severity || undefined,
-          status: filters.status || undefined,
-          search: filters.search || undefined,
-        });
-        setPageData(data);
-        setSelectedIds(new Set());
-      } catch (err) {
-        setError(isApiError(err) ? err.message : 'Unable to load faults.');
-      } finally {
-        setLoading(false);
+  // stable refs so the poll timer always reads the latest page/filters
+  const pageRef    = useRef(page);
+  const filtersRef = useRef(filters);
+  useEffect(() => { pageRef.current    = page;    }, [page]);
+  useEffect(() => { filtersRef.current = filters; }, [filters]);
+
+  const dialogOpen = !!pendingSingle || !!pendingBulk;
+
+  // ── Load alarms ───────────────────────────────────────────────────────────
+
+  const loadAlarms = useCallback(async (targetPage: number, showSpinner = true) => {
+    if (showSpinner) setLoading(true);
+    try {
+      const f = filtersRef.current;
+      const params: ListAlarmsParams = { page: targetPage };
+      if (f.deviceIp) params.deviceIp = f.deviceIp;
+      if (f.severity) params.severity = f.severity as Severity;
+      if (f.status)   params.status   = f.status   as AlarmStatus;
+
+      const res   = await faultApi.list(params);
+      const paged = res.data.data;
+      setAlarms(paged.content);
+      setTotalPages(paged.totalPages);
+      setLastRefreshed(new Date());
+    } catch (err) {
+      if (isApiError(err) && err.status === 401) {
+        navigate('/login', { replace: true });
+        return;
       }
-    },
-    [filters],
-  );
-
-  useEffect(() => {
-    setPage(0);
-  }, [filters]);
-
-  useEffect(() => {
-    loadFaults(page);
+      // Only surface errors on the initial / manual load, swallow background poll errors silently
+      if (showSpinner) {
+        setError(isApiError(err) ? err.message : 'Unable to load alarms.');
+        setAlarms([]);
+      }
+    } finally {
+      if (showSpinner) setLoading(false);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, loadFaults]);
+  }, []);
 
-  const faults = pageData?.content ?? [];
+  // Reset to page 0 when filters change
+  useEffect(() => { setPage(0); }, [filters]);
 
-  const toggleSelect = (faultId: number) => {
+  // Initial + filter/page-driven load
+  useEffect(() => { loadAlarms(page); }, [page, loadAlarms, filters]);
+
+  // ── Smart poll ────────────────────────────────────────────────────────────
+  // Each successful load schedules the next one after POLL_MS.
+  // Pauses while a dialog is open so the table doesn't jump mid-action.
+
+  useEffect(() => {
+    if (dialogOpen) return;
+
+    const timer = setTimeout(() => {
+      loadAlarms(pageRef.current, false);
+    }, POLL_MS);
+
+    return () => clearTimeout(timer);
+  }, [dialogOpen, loadAlarms, lastRefreshed]); // re-arms after every completed fetch
+
+  // ── Selection ─────────────────────────────────────────────────────────────
+
+  const toggleSelect = (id: number) =>
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(faultId)) next.delete(faultId);
-      else next.add(faultId);
+      next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
-  };
 
-  const toggleSelectAll = () => {
+  const toggleSelectAll = () =>
     setSelectedIds((prev) => {
-      const allSelected = faults.length > 0 && faults.every((f) => prev.has(f.faultId));
-      return allSelected ? new Set() : new Set(faults.map((f) => f.faultId));
+      const allSel = alarms.length > 0 && alarms.every((a) => prev.has(a.id));
+      return allSel ? new Set() : new Set(alarms.map((a) => a.id));
     });
-  };
+
+  const selectedAlarms     = alarms.filter((a) => selectedIds.has(a.id));
+  const canBulkAcknowledge = selectedIds.size > 0 && selectedAlarms.every((a) => a.status === 'UNACKNOWLEDGED');
+  const canBulkClear       = selectedIds.size > 0 && selectedAlarms.every((a) => a.status === 'ACKNOWLEDGED');
+
+  // ── Single action ─────────────────────────────────────────────────────────
 
   const handleConfirmSingle = async () => {
     if (!pendingSingle) return;
     setActionSubmitting(true);
     try {
-      const { type, fault } = pendingSingle;
-      const res =
-        type === 'acknowledge'
-          ? await faultApi.acknowledge(fault.faultId)
-          : type === 'clear'
-          ? await faultApi.clear(fault.faultId)
-          : await faultApi.terminate(fault.faultId);
+      const { type, alarm } = pendingSingle;
+      let res;
+      if (type === 'acknowledge') res = await faultApi.acknowledge(alarm.id);
+      else if (type === 'clear')  res = await faultApi.clear(alarm.id);
+      else                        res = await faultApi.terminate(alarm.id);
       setPendingSingle(null);
-      setSuccessMessage(res.message);
-      await loadFaults(page);
+      setSuccessMessage(res.data.message);
+      await loadAlarms(page);
     } catch (err) {
       setError(isApiError(err) ? err.message : 'Unable to complete that action.');
     } finally {
@@ -103,26 +142,19 @@ export default function ManagerFaultsPage() {
     }
   };
 
+  // ── Bulk action ───────────────────────────────────────────────────────────
+
   const handleConfirmBulk = async () => {
     if (!pendingBulk) return;
     setActionSubmitting(true);
+    const ids = Array.from(selectedIds);
     try {
-      const ids = Array.from(selectedIds);
-      const res = pendingBulk === 'acknowledge' ? await faultApi.bulkAcknowledge(ids) : await faultApi.bulkClear(ids);
+      const res = pendingBulk === 'acknowledge'
+        ? await faultApi.bulkAcknowledge(ids)
+        : await faultApi.bulkClear(ids);
       setPendingBulk(null);
-      if (res.results) {
-        const failed = res.results.filter((r) => !r.success);
-        setSuccessMessage(
-          failed.length === 0
-            ? `${res.results.length} fault(s) updated successfully.`
-            : `${res.results.length - failed.length} succeeded, ${failed.length} failed: ${failed
-                .map((f) => f.message)
-                .join('; ')}`,
-        );
-      } else {
-        setSuccessMessage(res.message ?? 'Bulk action completed.');
-      }
-      await loadFaults(page);
+      setSuccessMessage(res.data.message || 'Bulk action completed.');
+      await loadAlarms(page);
     } catch (err) {
       setError(isApiError(err) ? err.message : 'Unable to complete the bulk action.');
     } finally {
@@ -132,67 +164,66 @@ export default function ManagerFaultsPage() {
 
   return (
     <div>
-      <h1>Faults</h1>
       <ErrorBanner message={error} onDismiss={() => setError(null)} />
       <ErrorBanner message={successMessage} tone="success" onDismiss={() => setSuccessMessage(null)} />
 
-      <FaultFilters value={filters} onChange={setFilters} />
+      {/* Subtle live indicator — mimics SSE feel */}
+      <div className="live-indicator">
+        <span className="live-indicator-dot" />
+        <span>Live</span>
+        {lastRefreshed && (
+          <span className="live-indicator-time">
+            · updated {lastRefreshed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+          </span>
+        )}
+      </div>
 
+      <FaultFilters value={filters} onChange={(next) => setFilters(next)} />
+
+      {/* Bulk toolbar */}
       <div className="toolbar" style={{ justifyContent: 'space-between' }}>
         <span className="field-hint">{selectedIds.size} selected</span>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            disabled={selectedIds.size === 0}
-            onClick={() => setPendingBulk('acknowledge')}
-          >
+          <button type="button" className="btn btn-ghost"
+            disabled={!canBulkAcknowledge}
+            title={!canBulkAcknowledge ? 'Select only UNACKNOWLEDGED alarms' : undefined}
+            onClick={() => setPendingBulk('acknowledge')}>
             Acknowledge selected
           </button>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            disabled={selectedIds.size === 0}
-            onClick={() => setPendingBulk('clear')}
-          >
+          <button type="button" className="btn btn-ghost"
+            disabled={!canBulkClear}
+            title={!canBulkClear ? 'Select only ACKNOWLEDGED alarms' : undefined}
+            onClick={() => setPendingBulk('clear')}>
             Clear selected
           </button>
         </div>
       </div>
 
-      {loading && !pageData ? (
-        <LoadingSpinner label="Loading faults…" />
+      {loading && alarms.length === 0 ? (
+        <LoadingSpinner label="Loading alarms…" />
       ) : (
         <>
           <FaultTable
-            faults={faults}
+            alarms={alarms}
             selectedIds={selectedIds}
             onToggleSelect={toggleSelect}
             onToggleSelectAll={toggleSelectAll}
-            onAcknowledge={(fault) => setPendingSingle({ type: 'acknowledge', fault })}
-            onClear={(fault) => setPendingSingle({ type: 'clear', fault })}
-            onTerminate={(fault) => setPendingSingle({ type: 'terminate', fault })}
+            onAcknowledge={(a) => setPendingSingle({ type: 'acknowledge', alarm: a })}
+            onClear={(a) => setPendingSingle({ type: 'clear', alarm: a })}
+            onTerminate={(a) => setPendingSingle({ type: 'terminate', alarm: a })}
+            onNotesUpdated={() => loadAlarms(page, false)}
           />
-          {pageData && (
-            <Pagination
-              page={pageData.page}
-              totalPages={pageData.totalPages}
-              totalElements={pageData.totalElements}
-              onPageChange={setPage}
-            />
-          )}
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
         </>
       )}
 
       <ConfirmDialog
         open={!!pendingSingle}
-        title={`${capitalize(pendingSingle?.type ?? '')} this fault?`}
-        description={
-          pendingSingle
-            ? `${pendingSingle.fault.alarmName} on ${pendingSingle.fault.deviceIp} (${pendingSingle.fault.deviceSerialNumber})`
-            : undefined
-        }
-        confirmLabel={capitalize(pendingSingle?.type ?? '')}
+        title={`${cap(pendingSingle?.type ?? '')} this alarm?`}
+        description={pendingSingle
+          ? `${pendingSingle.alarm.trap} on ${pendingSingle.alarm.deviceIp} (${pendingSingle.alarm.serialNumber})`
+          : undefined}
+        confirmLabel={cap(pendingSingle?.type ?? '')}
         busy={actionSubmitting}
         onConfirm={handleConfirmSingle}
         onCancel={() => setPendingSingle(null)}
@@ -200,9 +231,9 @@ export default function ManagerFaultsPage() {
 
       <ConfirmDialog
         open={!!pendingBulk}
-        title={`${capitalize(pendingBulk ?? '')} ${selectedIds.size} fault(s)?`}
-        description="This action applies to every selected fault."
-        confirmLabel={capitalize(pendingBulk ?? '')}
+        title={`${cap(pendingBulk ?? '')} ${selectedIds.size} alarm(s)?`}
+        description="This action applies to every selected alarm. It is all-or-nothing."
+        confirmLabel={cap(pendingBulk ?? '')}
         busy={actionSubmitting}
         onConfirm={handleConfirmBulk}
         onCancel={() => setPendingBulk(null)}
@@ -211,7 +242,4 @@ export default function ManagerFaultsPage() {
   );
 }
 
-function capitalize(value: string): string {
-  if (!value) return '';
-  return value.charAt(0).toUpperCase() + value.slice(1);
-}
+function cap(s: string) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''; }

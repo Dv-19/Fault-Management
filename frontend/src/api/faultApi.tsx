@@ -1,57 +1,76 @@
-import { apiFetch } from './apiClient';
-import {
-  BulkActionResponse,
-  ApiMessage,
-  Fault,
-  FaultReportSummaryItem,
-  FaultStatus,
-  PageResponse,
-} from '../types/domain';
+/**
+ * Alarm / Fault management API.
+ *
+ * GET  /api/alarms?page&deviceIp&severity&status  — PagedResponse<Alarm>
+ * PUT  /api/alarms/{id}/acknowledge               — MANAGER only
+ * PUT  /api/alarms/acknowledge/bulk               — MANAGER only
+ * PUT  /api/alarms/{id}/clear                     — MANAGER only
+ * PUT  /api/alarms/clear/bulk                     — MANAGER only
+ * PUT  /api/alarms/{id}/terminate                 — MANAGER only
+ * PUT  /api/alarms/{id}/notes                     — MANAGER only
+ *
+ * A4: GET /api/alarms/stream — SSE, any authenticated role (when backend adds it)
+ */
+import apiClient from './apiClient';
+import { Alarm, AlarmStatus, ApiResponse, PagedResponse, Severity } from '../types/domain';
 
-export interface ListFaultsParams {
+export interface ListAlarmsParams {
   page: number;
-  size?: number;
-  deviceId?: number;
-  severity?: string;
-  status?: FaultStatus;
-  search?: string;
+  deviceIp?: string;
+  severity?: Severity;
+  status?: AlarmStatus;
 }
 
-export interface ReportParams {
-  severity?: string;
-  acknowledged?: boolean;
-  cleared?: boolean;
-  terminated?: boolean;
+export interface BulkAlarmActionRequest {
+  alarmIds: number[];
+}
+
+export interface AlarmNotesRequest {
+  notes: string;
 }
 
 export const faultApi = {
-  list: ({ page, size = 20, ...filters }: ListFaultsParams) =>
-    apiFetch<PageResponse<Fault>>('/api/faults', { params: { page, size, ...filters } }),
+  /**
+   * GET /api/alarms
+   * Returns PagedResponse<Alarm> — use content[], totalPages.
+   */
+  list: ({ page, deviceIp, severity, status }: ListAlarmsParams) => {
+    const params: Record<string, string | number> = { page };
+    if (deviceIp) params.deviceIp = deviceIp;
+    if (severity) params.severity = severity;
+    if (status)   params.status   = status;
+    return apiClient.get<ApiResponse<PagedResponse<Alarm>>>('/api/alarms', { params });
+  },
 
-  acknowledge: (faultId: number) =>
-    apiFetch<ApiMessage>(`/api/faults/${faultId}/acknowledge`, { method: 'PATCH' }),
+  acknowledge: (id: number) =>
+    apiClient.put<ApiResponse<null>>(`/api/alarms/${id}/acknowledge`),
 
-  clear: (faultId: number) =>
-    apiFetch<ApiMessage>(`/api/faults/${faultId}/clear`, { method: 'PATCH' }),
+  clear: (id: number) =>
+    apiClient.put<ApiResponse<null>>(`/api/alarms/${id}/clear`),
 
-  terminate: (faultId: number) =>
-    apiFetch<ApiMessage>(`/api/faults/${faultId}/terminate`, { method: 'PATCH' }),
+  terminate: (id: number) =>
+    apiClient.put<ApiResponse<null>>(`/api/alarms/${id}/terminate`),
 
-  bulkAcknowledge: (faultIds: number[]) =>
-    apiFetch<BulkActionResponse>('/api/faults/actions/acknowledge', {
-      method: 'PATCH',
-      body: JSON.stringify({ faultIds }),
-    }),
+  bulkAcknowledge: (alarmIds: number[]) =>
+    apiClient.put<ApiResponse<null>>('/api/alarms/acknowledge/bulk', {
+      alarmIds,
+    } satisfies BulkAlarmActionRequest),
 
-  bulkClear: (faultIds: number[]) =>
-    apiFetch<BulkActionResponse>('/api/faults/actions/clear', {
-      method: 'PATCH',
-      body: JSON.stringify({ faultIds }),
-    }),
+  bulkClear: (alarmIds: number[]) =>
+    apiClient.put<ApiResponse<null>>('/api/alarms/clear/bulk', {
+      alarmIds,
+    } satisfies BulkAlarmActionRequest),
 
-  report: (params: ReportParams) =>
-    apiFetch<Fault[]>('/api/faults/report', { params: params as Record<string, string> }),
-
-  reportSummary: (category: string) =>
-    apiFetch<FaultReportSummaryItem[]>('/api/faults/report/summary', { params: { category } }),
+  updateNotes: (id: number, notes: string) =>
+    apiClient.put<ApiResponse<null>>(`/api/alarms/${id}/notes`, {
+      notes,
+    } satisfies AlarmNotesRequest),
 };
+
+export function alarmActions(status: AlarmStatus) {
+  return {
+    canAcknowledge: status === 'UNACKNOWLEDGED',
+    canClear:       status === 'ACKNOWLEDGED',
+    canTerminate:   status === 'ACKNOWLEDGED' || status === 'CLEARED',
+  };
+}

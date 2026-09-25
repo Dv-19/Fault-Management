@@ -1,110 +1,141 @@
-.login-page {
-  min-height: 100%;
+/* ── Login screen ────────────────────────────────────────────────────────── */
+
+.login-screen {
+  min-height: 100vh;
+  display: flex;
+}
+
+/* ── Left brand panel ────────────────────────────────────────────────────── */
+
+.login-brand-panel {
+  flex: 0 0 380px;
+  background: var(--color-sidebar);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 60px 48px;
+  gap: 24px;
+}
+
+.login-logo {
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+}
+
+.login-brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.login-brand-name {
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.login-brand-sub {
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.45);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+/* ── Right form panel ────────────────────────────────────────────────────── */
+
+.login-form-panel {
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--color-navy-dark);
-  padding: var(--space-4);
+  padding: 40px 32px;
+  background: var(--color-bg);
 }
+
 .login-card {
   width: 100%;
   max-width: 380px;
-}
-.login-links {
-  margin-top: var(--space-4);
-  text-align: center;
-  font-size: 0.85rem;
-}
-
-/* ---------- split branding/form screen (main Login page only) ---------- */
-.login-screen {
-  min-height: 100%;
-  display: flex;
-}
-
-.login-brand-panel {
-  flex: 1 1 46%;
-  max-width: 560px;
-  background: radial-gradient(circle at 20% 20%, #123249 0%, var(--color-sidebar) 55%, #081522 100%);
-  color: #fff;
-  padding: var(--space-6) 56px;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: var(--space-4);
-}
-.login-brand-mark {
-  margin-bottom: var(--space-2);
-}
-.login-brand-title {
-  font-size: 1.7rem;
-  margin: 0;
-  max-width: 380px;
-}
-.login-brand-tagline {
-  color: rgba(255, 255, 255, 0.72);
-  max-width: 380px;
-  margin: 0;
-  line-height: 1.6;
-}
-.login-value-list {
-  margin: var(--space-3) 0 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  max-width: 380px;
-}
-.login-value-list li {
-  position: relative;
-  padding-left: 22px;
-  font-size: 0.88rem;
-  color: rgba(255, 255, 255, 0.82);
-  line-height: 1.5;
-}
-.login-value-list li::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 7px;
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-  background: var(--color-accent-light);
+  gap: 0;
 }
 
-.login-form-panel {
-  flex: 1 1 54%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-4);
-  padding: var(--space-5);
-  background: var(--color-bg);
-}
 .login-form-title {
-  margin-bottom: 2px;
-}
-.login-footnote {
-  color: var(--color-text-muted);
-  font-size: 0.78rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0 0 6px;
 }
 
-@media (max-width: 860px) {
+.login-form-sub {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin: 0 0 28px;
+}
+
+/* Override field default bottom margin inside login card */
+.login-card .field {
+  margin-bottom: 18px;
+}
+
+.login-submit {
+  width: 100%;
+  margin-top: 8px;
+  height: 44px;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.login-footer-link {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 0.82rem;
+}
+
+.login-footer-link a {
+  color: var(--color-text-muted);
+  text-decoration: none;
+  transition: color 150ms;
+}
+
+.login-footer-link a:hover {
+  color: var(--color-accent);
+}
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+
+@media (max-width: 680px) {
   .login-screen {
     flex-direction: column;
   }
+
   .login-brand-panel {
-    max-width: none;
-    padding: 40px 28px;
-    gap: var(--space-3);
+    flex: none;
+    flex-direction: row;
+    align-items: center;
+    padding: 20px 24px;
+    gap: 16px;
   }
-  .login-value-list {
+
+  .login-brand-sub {
     display: none;
   }
+
+  .login-brand-name {
+    font-size: 1.1rem;
+  }
+
+  .login-logo {
+    width: 36px;
+    height: 36px;
+  }
+
   .login-form-panel {
-    padding: var(--space-5) var(--space-4) 40px;
+    padding: 32px 20px;
+    align-items: flex-start;
   }
 }

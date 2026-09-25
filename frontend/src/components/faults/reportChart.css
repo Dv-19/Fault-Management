@@ -1,33 +1,214 @@
-.report-chart {
+/* ── Outer wrapper ─────────────────────────────────────── */
+.report-pie-wrap {
   display: flex;
   flex-direction: column;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+/* ── Hint text ─────────────────────────────────────────── */
+.report-hint {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+.report-hint kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 0.72rem;
+  background: #f3f5f8;
+}
+
+/* ── Summary cards ─────────────────────────────────────── */
+.report-summary-grid {
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--space-3);
 }
-.report-chart-row {
-  display: grid;
-  grid-template-columns: 110px 1fr 40px;
+
+.report-summary-card {
+  flex: 1 1 110px;
+  min-width: 100px;
+  border-radius: 8px;
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: var(--space-3);
+  gap: 2px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  cursor: pointer;
+  transition: transform 150ms ease, box-shadow 150ms ease, opacity 200ms;
 }
-.report-chart-label {
-  font-size: 0.85rem;
+.report-summary-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.10);
+}
+
+.report-summary-label {
+  font-size: 0.70rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.85;
+}
+
+.report-summary-count {
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.report-summary-pct {
+  font-size: 0.76rem;
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+/* ── Pie + legend row ──────────────────────────────────── */
+.report-chart-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+}
+
+.report-pie-svg {
+  flex-shrink: 0;
+  overflow: visible;
+}
+
+/* ── Legend ────────────────────────────────────────────── */
+.report-legend {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.report-legend-item {
+  display: grid;
+  grid-template-columns: 12px 1fr 44px 1fr 38px;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 7px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 150ms ease, opacity 200ms ease;
+}
+.report-legend-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.report-legend-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.report-legend-name {
+  font-size: 0.84rem;
   font-weight: 600;
   color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.report-chart-track {
-  background: #eef1f5;
-  border-radius: 999px;
-  height: 14px;
+
+.report-legend-count {
+  font-size: 0.9rem;
+  font-weight: 800;
+  text-align: right;
+}
+
+.report-legend-bar-track {
+  height: 6px;
+  background: #e8ecf0;
+  border-radius: 99px;
   overflow: hidden;
 }
-.report-chart-bar {
+
+.report-legend-bar-fill {
   height: 100%;
-  border-radius: 999px;
-  transition: width 300ms ease;
+  border-radius: 99px;
+  transition: width 500ms ease;
 }
-.report-chart-count {
-  text-align: right;
-  font-size: 0.85rem;
+
+.report-legend-pct {
+  font-size: 0.75rem;
   color: var(--color-text-muted);
-  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* ── Floating tooltip ──────────────────────────────────── */
+.report-tooltip {
+  position: absolute;
+  z-index: 50;
+  background: #fff;
+  border: 1.5px solid;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.13);
+  min-width: 150px;
+  overflow: hidden;
+  animation: tooltip-in 120ms ease;
+}
+
+@keyframes tooltip-in {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.report-tooltip-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px 6px;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.report-tooltip-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.report-tooltip-pin {
+  margin-left: auto;
+  font-size: 0.72rem;
+}
+
+.report-tooltip-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 12px 10px;
+}
+
+.report-tooltip-count {
+  font-size: 1.8rem;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.report-tooltip-pct {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+/* ── Responsive ─────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .report-chart-row {
+    justify-content: center;
+  }
+  .report-legend {
+    width: 100%;
+  }
 }
